@@ -50,6 +50,44 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Create uploads directory if it doesn't exist
+const fs = require('fs');
+const uploadsDir = 'uploads';
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('📁 Created uploads directory');
+}
+
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Multer config for file uploads
+const multer = require('multer');
+const path = require('path');
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+
+const upload = multer({ 
+  storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
 // User Schema
 const userSchema = new mongoose.Schema({
   name: { type: String, default: '' },
@@ -258,58 +296,93 @@ app.patch('/api/users/:email', async (req, res) => {
   }
 });
 
-// Register user (for checkout)
-app.post('/api/users/register', async (req, res) => {
+// Product routes with enhanced error handling
+app.post('/api/products', upload.single('image'), async (req, res) => {
   try {
-    const { name, email, phone } = req.body;
-    console.log('🔵 Register user:', { name, email, phone });
+    console.log('🔵 POST /api/products called');
+    console.log('🔵 Request body:', req.body);
+    console.log('🔵 Request file:', req.file ? `${req.file.filename} (${req.file.size} bytes)` : 'No file');
+    
+    const { name, description, price, category } = req.body;
 
-    if (!name || !email || !phone) {
+    // Detailed validation with specific error messages
+    if (!name || name.trim() === '') {
+      console.log('❌ Missing name field');
       return res.status(400).json({ 
         success: false,
-        message: 'Name, email, and phone are required' 
+        message: 'Product name is required' 
       });
     }
 
-    let user = await User.findOne({ email: email.toLowerCase() });
+    if (!description || description.trim() === '') {
+      console.log('❌ Missing description field');
+      return res.status(400).json({ 
+        success: false,
+        message: 'Product description is required' 
+      });
+    }
+
+    if (!price || isNaN(parseFloat(price))) {
+      console.log('❌ Invalid price field:', price);
+      return res.status(400).json({ 
+        success: false,
+        message: 'Valid product price is required' 
+      });
+    }
+
+    if (!category || category.trim() === '') {
+      console.log('❌ Missing category field');
+      return res.status(400).json({ 
+        success: false,
+        message: 'Product category is required' 
+      });
+    }
+
+    const imagePath = req.file ? `/uploads/${req.file.filename}` : '';
+    console.log('🔵 Image path:', imagePath);
+
+    const productData = {
+      name: name.trim(),
+      description: description.trim(),
+      price: parseFloat(price),
+      category: category.trim(),
+      imageUrl: imagePath
+    };
+
+    console.log('🔵 Creating product with data:', productData);
+
+    const newProduct = new Product(productData);
+    const savedProduct = await newProduct.save();
     
-    if (user) {
-      console.log('🟡 Updating existing user:', user.email);
-      user.name = name;
-      user.phone = phone;
-      if (!user.nickname) {
-        user.nickname = name.split(' ')[0];
-      }
-      await user.save();
-      
-      return res.json({ 
-        success: true,
-        message: 'User updated successfully', 
-        user 
-      });
-    }
-
-    // Create new user
-    user = new User({
-      name,
-      nickname: name.split(' ')[0],
-      email: email.toLowerCase(),
-      phone
-    });
-
-    await user.save();
-    console.log('✅ User registered:', user.email);
+    console.log('✅ Product created successfully:', savedProduct._id);
     
     res.status(201).json({ 
       success: true,
-      message: 'User registered successfully', 
-      user 
+      message: 'Product uploaded successfully', 
+      product: savedProduct 
     });
   } catch (error) {
-    console.error('❌ Register error:', error);
+    console.error('❌ Error creating product:', error);
+    
+    // Handle different types of errors
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Validation error',
+        details: error.message 
+      });
+    }
+    
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ 
+        success: false,
+        message: 'File too large. Maximum size is 5MB.' 
+      });
+    }
+    
     res.status(500).json({ 
       success: false,
-      message: 'Failed to register user',
+      message: 'Failed to upload product',
       error: error.message 
     });
   }
@@ -343,79 +416,14 @@ app.get('/api/debug/users', async (req, res) => {
   }
 });
 
-// Product routes with file upload support
-const multer = require('multer');
-const path = require('path');
+// Import and use product routes
+const productRoutes = require('./routes/Product');
 
-// Multer config for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-});
-const upload = multer({ storage });
+// Use product routes
+app.use('/api/products', productRoutes);
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-app.post('/api/products', upload.single('image'), async (req, res) => {
-  try {
-    const { name, description, price, category } = req.body;
-    const imagePath = req.file ? `/uploads/${req.file.filename}` : '';
-
-    console.log('🔵 Creating product:', { name, description, price, category, imagePath });
-
-    if (!name || !description || !price || !category) {
-      return res.status(400).json({ message: 'All fields are required' });
-    }
-
-    const newProduct = new Product({ 
-      name, 
-      description, 
-      price: parseFloat(price), 
-      category, 
-      imageUrl: imagePath 
-    });
-    
-    await newProduct.save();
-    console.log('✅ Product created successfully:', newProduct._id);
-    
-    res.status(201).json({ 
-      message: 'Product uploaded successfully', 
-      product: newProduct 
-    });
-  } catch (error) {
-    console.error('❌ Error uploading product:', error);
-    res.status(500).json({ message: 'Failed to upload product', error: error.message });
-  }
-});
-
-app.get('/api/products', async (req, res) => {
-  try {
-    const products = await Product.find().sort({ createdAt: -1 });
-    console.log(`📊 Retrieved ${products.length} products`);
-    res.json(products);
-  } catch (error) {
-    console.error('Error fetching products:', error);
-    res.status(500).json({ message: 'Failed to fetch products' });
-  }
-});
-
-app.delete('/api/products/:id', async (req, res) => {
-  try {
-    console.log('🗑️ Deleting product:', req.params.id);
-    const deleted = await Product.findByIdAndDelete(req.params.id);
-    
-    if (!deleted) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-    
-    console.log('✅ Product deleted successfully');
-    res.json({ message: 'Product deleted successfully' });
-  } catch (error) {
-    console.error('❌ Error deleting product:', error);
-    res.status(500).json({ message: 'Failed to delete product' });
-  }
-});
 
 // Order routes
 app.post('/api/orders', async (req, res) => {
