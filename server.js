@@ -160,7 +160,10 @@ app.get('/', (req, res) => {
       'POST /api/users/create-basic',
       'GET /api/users/:email',
       'PATCH /api/users/:email',
-      'POST /api/users/register'
+      'POST /api/users/register',
+      'POST /api/products',
+      'GET /api/products',
+      'DELETE /api/products/:id'
     ]
   });
 });
@@ -352,7 +355,37 @@ app.post('/api/users/register', async (req, res) => {
   }
 });
 
-// Product routes with enhanced error handling
+// Get all users (for admin)
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await User.find().sort({ createdAt: -1 });
+    console.log(`📊 Retrieved ${users.length} users`);
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Failed to fetch users' });
+  }
+});
+
+// Debug route - see all users
+app.get('/api/debug/users', async (req, res) => {
+  try {
+    const users = await User.find().select('email nickname name createdAt');
+    console.log(`📊 Debug: Found ${users.length} users in database`);
+    res.json({
+      success: true,
+      count: users.length,
+      users: users
+    });
+  } catch (error) {
+    console.error('❌ Debug users error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PRODUCT ROUTES - Built into main server (NO separate routes file)
+
+// Create product with image upload
 app.post('/api/products', upload.single('image'), async (req, res) => {
   try {
     console.log('🔵 POST /api/products called');
@@ -444,42 +477,35 @@ app.post('/api/products', upload.single('image'), async (req, res) => {
   }
 });
 
-// Get all users (for admin)
-app.get('/api/users', async (req, res) => {
+// Get all products
+app.get('/api/products', async (req, res) => {
   try {
-    const users = await User.find().sort({ createdAt: -1 });
-    console.log(`📊 Retrieved ${users.length} users`);
-    res.json(users);
+    const products = await Product.find().sort({ createdAt: -1 });
+    console.log(`📊 Retrieved ${products.length} products`);
+    res.json(products);
   } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ message: 'Failed to fetch users' });
+    console.error('Error fetching products:', error);
+    res.status(500).json({ message: 'Failed to fetch products' });
   }
 });
 
-// Debug route - see all users
-app.get('/api/debug/users', async (req, res) => {
+// Delete product
+app.delete('/api/products/:id', async (req, res) => {
   try {
-    const users = await User.find().select('email nickname name createdAt');
-    console.log(`📊 Debug: Found ${users.length} users in database`);
-    res.json({
-      success: true,
-      count: users.length,
-      users: users
-    });
+    console.log('🗑️ Deleting product:', req.params.id);
+    const deleted = await Product.findByIdAndDelete(req.params.id);
+    
+    if (!deleted) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+    
+    console.log('✅ Product deleted successfully');
+    res.json({ message: 'Product deleted successfully' });
   } catch (error) {
-    console.error('❌ Debug users error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('❌ Error deleting product:', error);
+    res.status(500).json({ message: 'Failed to delete product' });
   }
 });
-
-// Import and use product routes
-const productRoutes = require('./routes/Product');
-
-// Use product routes
-app.use('/api/products', productRoutes);
-
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Order routes
 app.post('/api/orders', async (req, res) => {
@@ -562,7 +588,10 @@ app.use((req, res) => {
       'GET /api/users/:email',
       'PATCH /api/users/:email',
       'POST /api/users/register',
-      'GET /api/debug/users'
+      'GET /api/debug/users',
+      'POST /api/products',
+      'GET /api/products',
+      'DELETE /api/products/:id'
     ]
   });
 });
