@@ -389,41 +389,58 @@ app.get('/api/debug/users', async (req, res) => {
 app.post('/api/products', upload.single('image'), async (req, res) => {
   try {
     console.log('🔵 POST /api/products called');
-    console.log('🔵 Request body:', req.body);
-    console.log('🔵 Request file:', req.file ? `${req.file.filename} (${req.file.size} bytes)` : 'No file');
+    console.log('🔵 Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('🔵 Request body:', JSON.stringify(req.body, null, 2));
+    console.log('🔵 Request file:', req.file ? {
+      fieldname: req.file.fieldname,
+      originalname: req.file.originalname,
+      filename: req.file.filename,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    } : 'No file uploaded');
+    
+    // Log all form fields received
+    console.log('🔵 All form fields received:');
+    Object.keys(req.body).forEach(key => {
+      console.log(`  ${key}: "${req.body[key]}" (type: ${typeof req.body[key]})`);
+    });
     
     const { name, description, price, category } = req.body;
 
     // Detailed validation with specific error messages
-    if (!name || name.trim() === '') {
-      console.log('❌ Missing name field');
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      console.log('❌ Missing or invalid name field:', { name, type: typeof name });
       return res.status(400).json({ 
         success: false,
-        message: 'Product name is required' 
+        message: 'Product name is required and must be a non-empty string',
+        received: { name, type: typeof name }
       });
     }
 
-    if (!description || description.trim() === '') {
-      console.log('❌ Missing description field');
+    if (!description || typeof description !== 'string' || description.trim() === '') {
+      console.log('❌ Missing or invalid description field:', { description, type: typeof description });
       return res.status(400).json({ 
         success: false,
-        message: 'Product description is required' 
+        message: 'Product description is required and must be a non-empty string',
+        received: { description, type: typeof description }
       });
     }
 
     if (!price || isNaN(parseFloat(price))) {
-      console.log('❌ Invalid price field:', price);
+      console.log('❌ Invalid price field:', { price, type: typeof price, parsed: parseFloat(price) });
       return res.status(400).json({ 
         success: false,
-        message: 'Valid product price is required' 
+        message: 'Valid product price is required (must be a number)',
+        received: { price, type: typeof price, parsed: parseFloat(price) }
       });
     }
 
-    if (!category || category.trim() === '') {
-      console.log('❌ Missing category field');
+    if (!category || typeof category !== 'string' || category.trim() === '') {
+      console.log('❌ Missing or invalid category field:', { category, type: typeof category });
       return res.status(400).json({ 
         success: false,
-        message: 'Product category is required' 
+        message: 'Product category is required and must be a non-empty string',
+        received: { category, type: typeof category }
       });
     }
 
@@ -438,7 +455,7 @@ app.post('/api/products', upload.single('image'), async (req, res) => {
       imageUrl: imagePath
     };
 
-    console.log('🔵 Creating product with data:', productData);
+    console.log('🔵 Creating product with data:', JSON.stringify(productData, null, 2));
 
     const newProduct = new Product(productData);
     const savedProduct = await newProduct.save();
@@ -452,20 +469,32 @@ app.post('/api/products', upload.single('image'), async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error creating product:', error);
+    console.error('❌ Error stack:', error.stack);
     
     // Handle different types of errors
     if (error.name === 'ValidationError') {
+      console.log('❌ Validation Error Details:', error.message);
       return res.status(400).json({ 
         success: false,
         message: 'Validation error',
-        details: error.message 
+        details: error.message,
+        validationErrors: error.errors
       });
     }
     
     if (error.code === 'LIMIT_FILE_SIZE') {
+      console.log('❌ File too large');
       return res.status(400).json({ 
         success: false,
         message: 'File too large. Maximum size is 5MB.' 
+      });
+    }
+    
+    if (error instanceof multer.MulterError) {
+      console.log('❌ Multer Error:', error.message);
+      return res.status(400).json({ 
+        success: false,
+        message: `File upload error: ${error.message}` 
       });
     }
     
@@ -599,9 +628,11 @@ app.use((req, res) => {
 // Error handler
 app.use((err, req, res, next) => {
   console.error('❌ Server error:', err);
+  console.error('❌ Server error stack:', err.stack);
   res.status(500).json({
     success: false,
-    message: 'Internal server error'
+    message: 'Internal server error',
+    error: err.message
   });
 });
 
