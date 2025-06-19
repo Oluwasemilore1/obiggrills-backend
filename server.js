@@ -343,14 +343,77 @@ app.get('/api/debug/users', async (req, res) => {
   }
 });
 
-// Product routes
+// Product routes with file upload support
+const multer = require('multer');
+const path = require('path');
+
+// Multer config for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'uploads/'),
+  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+});
+const upload = multer({ storage });
+
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+app.post('/api/products', upload.single('image'), async (req, res) => {
+  try {
+    const { name, description, price, category } = req.body;
+    const imagePath = req.file ? `/uploads/${req.file.filename}` : '';
+
+    console.log('🔵 Creating product:', { name, description, price, category, imagePath });
+
+    if (!name || !description || !price || !category) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    const newProduct = new Product({ 
+      name, 
+      description, 
+      price: parseFloat(price), 
+      category, 
+      imageUrl: imagePath 
+    });
+    
+    await newProduct.save();
+    console.log('✅ Product created successfully:', newProduct._id);
+    
+    res.status(201).json({ 
+      message: 'Product uploaded successfully', 
+      product: newProduct 
+    });
+  } catch (error) {
+    console.error('❌ Error uploading product:', error);
+    res.status(500).json({ message: 'Failed to upload product', error: error.message });
+  }
+});
+
 app.get('/api/products', async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
+    console.log(`📊 Retrieved ${products.length} products`);
     res.json(products);
   } catch (error) {
     console.error('Error fetching products:', error);
     res.status(500).json({ message: 'Failed to fetch products' });
+  }
+});
+
+app.delete('/api/products/:id', async (req, res) => {
+  try {
+    console.log('🗑️ Deleting product:', req.params.id);
+    const deleted = await Product.findByIdAndDelete(req.params.id);
+    
+    if (!deleted) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+    
+    console.log('✅ Product deleted successfully');
+    res.json({ message: 'Product deleted successfully' });
+  } catch (error) {
+    console.error('❌ Error deleting product:', error);
+    res.status(500).json({ message: 'Failed to delete product' });
   }
 });
 
