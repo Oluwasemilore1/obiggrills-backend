@@ -1,5 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
 
@@ -51,7 +54,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Create uploads directory if it doesn't exist
-const fs = require('fs');
 const uploadsDir = 'uploads';
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -62,9 +64,6 @@ if (!fs.existsSync(uploadsDir)) {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Multer config for file uploads
-const multer = require('multer');
-const path = require('path');
-
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, 'uploads/');
@@ -292,6 +291,63 @@ app.patch('/api/users/:email', async (req, res) => {
     res.status(500).json({ 
       success: false,
       message: error.message
+    });
+  }
+});
+
+// Register user (for checkout)
+app.post('/api/users/register', async (req, res) => {
+  try {
+    const { name, email, phone } = req.body;
+    console.log('🔵 Register user:', { name, email, phone });
+
+    if (!name || !email || !phone) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Name, email, and phone are required' 
+      });
+    }
+
+    let user = await User.findOne({ email: email.toLowerCase() });
+    
+    if (user) {
+      console.log('🟡 Updating existing user:', user.email);
+      user.name = name;
+      user.phone = phone;
+      if (!user.nickname) {
+        user.nickname = name.split(' ')[0];
+      }
+      await user.save();
+      
+      return res.json({ 
+        success: true,
+        message: 'User updated successfully', 
+        user 
+      });
+    }
+
+    // Create new user
+    user = new User({
+      name,
+      nickname: name.split(' ')[0],
+      email: email.toLowerCase(),
+      phone
+    });
+
+    await user.save();
+    console.log('✅ User registered:', user.email);
+    
+    res.status(201).json({ 
+      success: true,
+      message: 'User registered successfully', 
+      user 
+    });
+  } catch (error) {
+    console.error('❌ Register error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to register user',
+      error: error.message 
     });
   }
 });
