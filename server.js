@@ -161,9 +161,14 @@ app.get('/', (req, res) => {
       'GET /api/users/:email',
       'PATCH /api/users/:email',
       'POST /api/users/register',
+      'GET /api/users',
+      'GET /api/debug/users',
       'POST /api/products',
       'GET /api/products',
-      'DELETE /api/products/:id'
+      'DELETE /api/products/:id',
+      'POST /api/orders',
+      'GET /api/orders',
+      'PATCH /api/orders/:id'
     ]
   });
 });
@@ -604,8 +609,6 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
-// Add this route to your server.js after the existing order routes
-
 // Update order status (PATCH /api/orders/:id)
 app.patch('/api/orders/:id', async (req, res) => {
   try {
@@ -666,10 +669,14 @@ app.use((req, res) => {
       'GET /api/users/:email',
       'PATCH /api/users/:email',
       'POST /api/users/register',
+      'GET /api/users',
       'GET /api/debug/users',
       'POST /api/products',
       'GET /api/products',
-      'DELETE /api/products/:id'
+      'DELETE /api/products/:id',
+      'POST /api/orders',
+      'GET /api/orders',
+      'PATCH /api/orders/:id'
     ]
   });
 });
