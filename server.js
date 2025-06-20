@@ -41,11 +41,9 @@ app.use((req, res, next) => {
   res.header('Access-Control-Max-Age', '86400');
   
   if (req.method === 'OPTIONS') {
-    console.log('🔄 OPTIONS from:', origin);
     return res.status(204).end();
   }
   
-  console.log(`🌐 ${req.method} ${req.path} from ${origin || 'direct'}`);
   next();
 });
 
@@ -57,7 +55,6 @@ app.use(express.urlencoded({ extended: true }));
 const uploadsDir = 'uploads';
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
-  console.log('📁 Created uploads directory');
 }
 
 // Serve uploaded files
@@ -174,7 +171,6 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/test', (req, res) => {
-  console.log('📍 /api/test route hit');
   res.json({ 
     success: true, 
     message: 'OBIGGRILLS API working perfectly!',
@@ -198,7 +194,6 @@ app.get('/api/health', (req, res) => {
 app.post('/api/users/create-basic', async (req, res) => {
   try {
     const { email, nickname } = req.body;
-    console.log('🔵 Creating user:', { email, nickname });
 
     if (!email || !nickname) {
       return res.status(400).json({ 
@@ -210,7 +205,6 @@ app.post('/api/users/create-basic', async (req, res) => {
     // Check if exists
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {
-      console.log('🟡 User already exists:', existing._id);
       return res.json({ 
         success: true,
         message: 'User exists', 
@@ -226,7 +220,6 @@ app.post('/api/users/create-basic', async (req, res) => {
     });
 
     const saved = await user.save();
-    console.log('✅ User created:', saved._id);
     
     res.status(201).json({ 
       success: true,
@@ -246,8 +239,6 @@ app.post('/api/users/create-basic', async (req, res) => {
 // Get user
 app.get('/api/users/:email', async (req, res) => {
   try {
-    console.log('🔵 Getting user:', req.params.email);
-    
     const user = await User.findOne({ email: req.params.email.toLowerCase() });
     
     if (!user) {
@@ -257,7 +248,6 @@ app.get('/api/users/:email', async (req, res) => {
       });
     }
 
-    console.log('✅ User found:', user.email);
     res.json(user);
   } catch (error) {
     console.error('❌ Get user error:', error);
@@ -307,7 +297,6 @@ app.patch('/api/users/:email', async (req, res) => {
 app.post('/api/users/register', async (req, res) => {
   try {
     const { name, email, phone } = req.body;
-    console.log('🔵 Register user:', { name, email, phone });
 
     if (!name || !email || !phone) {
       return res.status(400).json({ 
@@ -319,7 +308,6 @@ app.post('/api/users/register', async (req, res) => {
     let user = await User.findOne({ email: email.toLowerCase() });
     
     if (user) {
-      console.log('🟡 Updating existing user:', user.email);
       user.name = name;
       user.phone = phone;
       if (!user.nickname) {
@@ -343,7 +331,6 @@ app.post('/api/users/register', async (req, res) => {
     });
 
     await user.save();
-    console.log('✅ User registered:', user.email);
     
     res.status(201).json({ 
       success: true,
@@ -364,7 +351,6 @@ app.post('/api/users/register', async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     const users = await User.find().sort({ createdAt: -1 });
-    console.log(`📊 Retrieved ${users.length} users`);
     res.json(users);
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -376,7 +362,6 @@ app.get('/api/users', async (req, res) => {
 app.get('/api/debug/users', async (req, res) => {
   try {
     const users = await User.find().select('email nickname name createdAt');
-    console.log(`📊 Debug: Found ${users.length} users in database`);
     res.json({
       success: true,
       count: users.length,
@@ -388,69 +373,43 @@ app.get('/api/debug/users', async (req, res) => {
   }
 });
 
-// PRODUCT ROUTES - Built into main server (NO separate routes file)
+// PRODUCT ROUTES
 
 // Create product with image upload
 app.post('/api/products', upload.single('image'), async (req, res) => {
   try {
-    console.log('🔵 POST /api/products called');
-    console.log('🔵 Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('🔵 Request body:', JSON.stringify(req.body, null, 2));
-    console.log('🔵 Request file:', req.file ? {
-      fieldname: req.file.fieldname,
-      originalname: req.file.originalname,
-      filename: req.file.filename,
-      mimetype: req.file.mimetype,
-      size: req.file.size
-    } : 'No file uploaded');
-    
-    // Log all form fields received
-    console.log('🔵 All form fields received:');
-    Object.keys(req.body).forEach(key => {
-      console.log(`  ${key}: "${req.body[key]}" (type: ${typeof req.body[key]})`);
-    });
-    
     const { name, description, price, category } = req.body;
 
-    // Detailed validation with specific error messages
+    // Validation
     if (!name || typeof name !== 'string' || name.trim() === '') {
-      console.log('❌ Missing or invalid name field:', { name, type: typeof name });
       return res.status(400).json({ 
         success: false,
-        message: 'Product name is required and must be a non-empty string',
-        received: { name, type: typeof name }
+        message: 'Product name is required'
       });
     }
 
     if (!description || typeof description !== 'string' || description.trim() === '') {
-      console.log('❌ Missing or invalid description field:', { description, type: typeof description });
       return res.status(400).json({ 
         success: false,
-        message: 'Product description is required and must be a non-empty string',
-        received: { description, type: typeof description }
+        message: 'Product description is required'
       });
     }
 
     if (!price || isNaN(parseFloat(price))) {
-      console.log('❌ Invalid price field:', { price, type: typeof price, parsed: parseFloat(price) });
       return res.status(400).json({ 
         success: false,
-        message: 'Valid product price is required (must be a number)',
-        received: { price, type: typeof price, parsed: parseFloat(price) }
+        message: 'Valid product price is required'
       });
     }
 
     if (!category || typeof category !== 'string' || category.trim() === '') {
-      console.log('❌ Missing or invalid category field:', { category, type: typeof category });
       return res.status(400).json({ 
         success: false,
-        message: 'Product category is required and must be a non-empty string',
-        received: { category, type: typeof category }
+        message: 'Product category is required'
       });
     }
 
     const imagePath = req.file ? `/uploads/${req.file.filename}` : '';
-    console.log('🔵 Image path:', imagePath);
 
     const productData = {
       name: name.trim(),
@@ -460,12 +419,8 @@ app.post('/api/products', upload.single('image'), async (req, res) => {
       imageUrl: imagePath
     };
 
-    console.log('🔵 Creating product with data:', JSON.stringify(productData, null, 2));
-
     const newProduct = new Product(productData);
     const savedProduct = await newProduct.save();
-    
-    console.log('✅ Product created successfully:', savedProduct._id);
     
     res.status(201).json({ 
       success: true,
@@ -474,21 +429,16 @@ app.post('/api/products', upload.single('image'), async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error creating product:', error);
-    console.error('❌ Error stack:', error.stack);
     
-    // Handle different types of errors
     if (error.name === 'ValidationError') {
-      console.log('❌ Validation Error Details:', error.message);
       return res.status(400).json({ 
         success: false,
         message: 'Validation error',
-        details: error.message,
-        validationErrors: error.errors
+        details: error.message
       });
     }
     
     if (error.code === 'LIMIT_FILE_SIZE') {
-      console.log('❌ File too large');
       return res.status(400).json({ 
         success: false,
         message: 'File too large. Maximum size is 5MB.' 
@@ -496,7 +446,6 @@ app.post('/api/products', upload.single('image'), async (req, res) => {
     }
     
     if (error instanceof multer.MulterError) {
-      console.log('❌ Multer Error:', error.message);
       return res.status(400).json({ 
         success: false,
         message: `File upload error: ${error.message}` 
@@ -515,7 +464,6 @@ app.post('/api/products', upload.single('image'), async (req, res) => {
 app.get('/api/products', async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
-    console.log(`📊 Retrieved ${products.length} products`);
     res.json(products);
   } catch (error) {
     console.error('Error fetching products:', error);
@@ -526,14 +474,12 @@ app.get('/api/products', async (req, res) => {
 // Delete product
 app.delete('/api/products/:id', async (req, res) => {
   try {
-    console.log('🗑️ Deleting product:', req.params.id);
     const deleted = await Product.findByIdAndDelete(req.params.id);
     
     if (!deleted) {
       return res.status(404).json({ message: 'Product not found' });
     }
     
-    console.log('✅ Product deleted successfully');
     res.json({ message: 'Product deleted successfully' });
   } catch (error) {
     console.error('❌ Error deleting product:', error);
@@ -541,20 +487,21 @@ app.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-// Order routes
+// ORDER ROUTES
+
+// Create order
 app.post('/api/orders', async (req, res) => {
-  const order = req.body;
-  console.log('🔵 Received order:', JSON.stringify(order, null, 2));
-
-  if (!order || !order.customer || !order.items || order.items.length === 0) {
-    return res.status(400).json({ message: 'Invalid order data' });
-  }
-
-  if (!order.customer.email) {
-    return res.status(400).json({ message: 'Customer email is required' });
-  }
-
   try {
+    const order = req.body;
+
+    if (!order || !order.customer || !order.items || order.items.length === 0) {
+      return res.status(400).json({ message: 'Invalid order data' });
+    }
+
+    if (!order.customer.email) {
+      return res.status(400).json({ message: 'Customer email is required' });
+    }
+
     const orderData = {
       customer: {
         name: order.customer.name,
@@ -577,7 +524,6 @@ app.post('/api/orders', async (req, res) => {
     const newOrder = new Order(orderData);
     await newOrder.save();
     
-    console.log('✅ Order saved successfully:', newOrder._id);
     res.status(201).json({ 
       message: 'Order placed successfully', 
       orderId: newOrder._id,
@@ -589,10 +535,10 @@ app.post('/api/orders', async (req, res) => {
   }
 });
 
+// Get orders
 app.get('/api/orders', async (req, res) => {
   try {
     const email = req.query.email;
-    console.log('🔵 Fetching orders for email:', email);
     
     let filter = {};
     if (email) {
@@ -600,8 +546,6 @@ app.get('/api/orders', async (req, res) => {
     }
     
     const orders = await Order.find(filter).sort({ createdAt: -1 });
-    console.log(`📊 Found ${orders.length} orders`);
-    
     res.json(orders);
   } catch (error) {
     console.error('Error fetching orders:', error);
@@ -609,13 +553,14 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
-// Update order status (PATCH /api/orders/:id)
+// Update order status - FIXED: Add explicit debug logging
 app.patch('/api/orders/:id', async (req, res) => {
+  console.log('🎯 PATCH ROUTE HIT - Order ID:', req.params.id);
+  console.log('🎯 Request body:', req.body);
+  
   try {
     const { id } = req.params;
     const { fulfilled } = req.body;
-    
-    console.log('🔵 Updating order:', id, 'to fulfilled:', fulfilled);
 
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -629,7 +574,7 @@ app.patch('/api/orders/:id', async (req, res) => {
     const updatedOrder = await Order.findByIdAndUpdate(
       id,
       { fulfilled: fulfilled },
-      { new: true } // Return the updated document
+      { new: true }
     );
 
     if (!updatedOrder) {
@@ -656,7 +601,7 @@ app.patch('/api/orders/:id', async (req, res) => {
   }
 });
 
-// 404 handler
+// 404 handler - MUST BE LAST
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -684,7 +629,6 @@ app.use((req, res) => {
 // Error handler
 app.use((err, req, res, next) => {
   console.error('❌ Server error:', err);
-  console.error('❌ Server error stack:', err.stack);
   res.status(500).json({
     success: false,
     message: 'Internal server error',
