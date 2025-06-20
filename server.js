@@ -604,6 +604,55 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
+// Add this route to your server.js after the existing order routes
+
+// Update order status (PATCH /api/orders/:id)
+app.patch('/api/orders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fulfilled } = req.body;
+    
+    console.log('🔵 Updating order:', id, 'to fulfilled:', fulfilled);
+
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid order ID' 
+      });
+    }
+
+    // Find and update the order
+    const updatedOrder = await Order.findByIdAndUpdate(
+      id,
+      { fulfilled: fulfilled },
+      { new: true } // Return the updated document
+    );
+
+    if (!updatedOrder) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Order not found' 
+      });
+    }
+
+    console.log('✅ Order updated successfully:', updatedOrder._id);
+    
+    res.json({ 
+      success: true,
+      message: 'Order status updated successfully',
+      order: updatedOrder 
+    });
+  } catch (error) {
+    console.error('❌ Error updating order:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to update order status',
+      error: error.message 
+    });
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
