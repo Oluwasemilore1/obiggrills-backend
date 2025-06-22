@@ -4,6 +4,10 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+// Cloudinary imports
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
 const app = express();
 
 // Use MongoDB Atlas for production, local for development
@@ -18,6 +22,19 @@ mongoose.connect(mongoUri)
     console.error('❌ MongoDB error:', err);
     process.exit(1);
   });
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+console.log('☁️ Cloudinary configured:', {
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME ? '✅' : '❌',
+  api_key: process.env.CLOUDINARY_API_KEY ? '✅' : '❌',
+  api_secret: process.env.CLOUDINARY_API_SECRET ? '✅' : '❌'
+});
 
 // PRODUCTION CORS - Allow Netlify and local development
 app.use((req, res, next) => {
@@ -51,23 +68,17 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = 'uploads';
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Multer config for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+// Cloudinary storage configuration
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'obiggrills-products',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [
+      { width: 800, height: 600, crop: 'fill' },
+      { quality: 'auto', fetch_format: 'auto' }
+    ],
   },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  }
 });
 
 const upload = multer({ 
@@ -151,6 +162,7 @@ app.get('/', (req, res) => {
     status: 'running',
     version: '1.0.0',
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    cloudinary: process.env.CLOUDINARY_CLOUD_NAME ? 'configured' : 'not configured',
     endpoints: [
       'GET /api/test',
       'GET /api/health',
@@ -176,7 +188,8 @@ app.get('/api/test', (req, res) => {
     message: 'OBIGGRILLS API working perfectly!',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    cloudinary: process.env.CLOUDINARY_CLOUD_NAME ? 'configured' : 'not configured'
   });
 });
 
@@ -184,6 +197,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'healthy',
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    cloudinary: process.env.CLOUDINARY_CLOUD_NAME ? 'configured' : 'not configured',
     uptime: process.uptime(),
     memory: process.memoryUsage(),
     timestamp: new Date().toISOString()
@@ -373,11 +387,21 @@ app.get('/api/debug/users', async (req, res) => {
   }
 });
 
-// PRODUCT ROUTES
+// PRODUCT ROUTES WITH CLOUDINARY
 
-// Create product with image upload
+// Create product with Cloudinary image upload
 app.post('/api/products', upload.single('image'), async (req, res) => {
   try {
+    console.log('🔵 POST /api/products called');
+    console.log('🔵 Request body:', req.body);
+    console.log('🔵 Request file:', req.file ? {
+      fieldname: req.file.fieldname,
+      originalname: req.file.originalname,
+      filename: req.file.filename,
+      path: req.file.path,
+      size: req.file.size
+    } : 'No file uploaded');
+    
     const { name, description, price, category } = req.body;
 
     // Validation
@@ -409,18 +433,22 @@ app.post('/api/products', upload.single('image'), async (req, res) => {
       });
     }
 
-    const imagePath = req.file ? `/uploads/${req.file.filename}` : '';
+    // Cloudinary automatically provides the full URL
+    const imageUrl = req.file ? req.file.path : '';
+    console.log('☁️ Cloudinary image URL:', imageUrl);
 
     const productData = {
       name: name.trim(),
       description: description.trim(),
       price: parseFloat(price),
       category: category.trim(),
-      imageUrl: imagePath
+      imageUrl: imageUrl
     };
 
     const newProduct = new Product(productData);
     const savedProduct = await newProduct.save();
+    
+    console.log('✅ Product created with Cloudinary image:', savedProduct._id);
     
     res.status(201).json({ 
       success: true,
@@ -553,11 +581,8 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
-// Update order status - FIXED: Add explicit debug logging
+// Update order status
 app.patch('/api/orders/:id', async (req, res) => {
-  console.log('🎯 PATCH ROUTE HIT - Order ID:', req.params.id);
-  console.log('🎯 Request body:', req.body);
-  
   try {
     const { id } = req.params;
     const { fulfilled } = req.body;
@@ -583,8 +608,6 @@ app.patch('/api/orders/:id', async (req, res) => {
         message: 'Order not found' 
       });
     }
-
-    console.log('✅ Order updated successfully:', updatedOrder._id);
     
     res.json({ 
       success: true,
@@ -601,7 +624,7 @@ app.patch('/api/orders/:id', async (req, res) => {
   }
 });
 
-// 404 handler - MUST BE LAST
+// 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -641,6 +664,7 @@ const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 OBIGGRILLS API Server running on port ${PORT}`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`☁️ Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME ? 'configured' : 'not configured'}`);
   console.log(`🧪 Test route: /api/test`);
   console.log(`💚 Health check: /api/health`);
 });
