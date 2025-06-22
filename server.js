@@ -36,9 +36,11 @@ console.log('☁️ Cloudinary configured:', {
   api_secret: process.env.CLOUDINARY_API_SECRET ? '✅' : '❌'
 });
 
-// PRODUCTION CORS - Allow Netlify and local development
+// PRODUCTION CORS - Fixed for Netlify deployment
 app.use((req, res, next) => {
   const origin = req.headers.origin;
+  
+  console.log('🌐 Request from origin:', origin);
   
   // Allow specific origins
   const allowedOrigins = [
@@ -48,8 +50,16 @@ app.use((req, res, next) => {
     'https://obiggrills.netlify.app/'
   ];
   
+  // More permissive CORS for production
   if (allowedOrigins.includes(origin) || !origin) {
     res.header('Access-Control-Allow-Origin', origin || '*');
+  } else {
+    // Allow all Netlify domains as fallback
+    if (origin && origin.includes('.netlify.app')) {
+      res.header('Access-Control-Allow-Origin', origin);
+    } else {
+      res.header('Access-Control-Allow-Origin', '*');
+    }
   }
   
   res.header('Access-Control-Allow-Credentials', 'true');
@@ -58,9 +68,11 @@ app.use((req, res, next) => {
   res.header('Access-Control-Max-Age', '86400');
   
   if (req.method === 'OPTIONS') {
+    console.log('🔄 OPTIONS request from:', origin);
     return res.status(204).end();
   }
   
+  console.log(`🌐 ${req.method} ${req.path} from ${origin || 'direct'}`);
   next();
 });
 
