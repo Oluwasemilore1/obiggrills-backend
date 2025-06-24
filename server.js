@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const cron = require('node-cron'); // Add this import
 
 // Cloudinary imports
 const cloudinary = require('cloudinary').v2;
@@ -689,5 +690,30 @@ server.on('error', (err) => {
     console.error('❌ Server error:', err);
   }
 });
+
+// 🏓 KEEP-ALIVE SYSTEM - Prevents Render free tier from sleeping
+// Only run in production to avoid unnecessary pings in development
+if (process.env.NODE_ENV === 'production' || process.env.RENDER_EXTERNAL_URL) {
+  const selfUrl = process.env.RENDER_EXTERNAL_URL || 'https://obiggrills-api.onrender.com';
+  
+  // Self-ping every 14 minutes to stay awake
+  cron.schedule('*/14 * * * *', async () => {
+    try {
+      const response = await fetch(`${selfUrl}/api/health`);
+      if (response.ok) {
+        console.log(`🏓 Self-ping successful: ${response.status} at ${new Date().toISOString()}`);
+      } else {
+        console.log(`⚠️ Self-ping returned: ${response.status} at ${new Date().toISOString()}`);
+      }
+    } catch (error) {
+      console.log(`❌ Self-ping failed: ${error.message} at ${new Date().toISOString()}`);
+    }
+  });
+
+  console.log('🔄 Keep-alive system activated - server will ping itself every 14 minutes');
+  console.log(`🎯 Self-ping URL: ${selfUrl}/api/health`);
+} else {
+  console.log('💤 Keep-alive system disabled (not in production)');
+}
 
 module.exports = app;
