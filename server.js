@@ -187,6 +187,7 @@ app.get('/', (req, res) => {
       'GET /api/debug/users',
       'POST /api/products',
       'GET /api/products',
+      'PUT /api/products/:id',
       'DELETE /api/products/:id',
       'POST /api/orders',
       'GET /api/orders',
@@ -512,6 +513,89 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
+// Update product route - NEW ADDITION
+app.put('/api/products/:id', async (req, res) => {
+  try {
+    console.log('🔵 PUT /api/products/:id called');
+    console.log('🔵 Product ID:', req.params.id);
+    console.log('🔵 Request body:', req.body);
+    
+    const { id } = req.params;
+    const { name, description, price, category } = req.body;
+
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid product ID' 
+      });
+    }
+
+    // Validation
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Product name is required'
+      });
+    }
+
+    if (!description || typeof description !== 'string' || description.trim() === '') {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Product description is required'
+      });
+    }
+
+    if (!price || isNaN(parseFloat(price))) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Valid product price is required'
+      });
+    }
+
+    if (!category || typeof category !== 'string' || category.trim() === '') {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Product category is required'
+      });
+    }
+
+    // Find and update the product
+    const updatedProduct = await Product.findByIdAndUpdate(
+      id,
+      {
+        name: name.trim(),
+        description: description.trim(),
+        price: parseFloat(price),
+        category: category.trim()
+      },
+      { new: true }
+    );
+
+    if (!updatedProduct) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Product not found' 
+      });
+    }
+    
+    console.log('✅ Product updated successfully:', updatedProduct._id);
+    
+    res.json({ 
+      success: true,
+      message: 'Product updated successfully',
+      product: updatedProduct 
+    });
+  } catch (error) {
+    console.error('❌ Error updating product:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to update product',
+      error: error.message 
+    });
+  }
+});
+
 // Delete product
 app.delete('/api/products/:id', async (req, res) => {
   try {
@@ -654,6 +738,7 @@ app.use((req, res) => {
       'GET /api/debug/users',
       'POST /api/products',
       'GET /api/products',
+      'PUT /api/products/:id',
       'DELETE /api/products/:id',
       'POST /api/orders',
       'GET /api/orders',
